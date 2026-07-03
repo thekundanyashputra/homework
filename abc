@@ -1,0 +1,266 @@
+Question 1: Snort (Intrusion Detection System)
+1. Install Snort on Ubuntu
+bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install dependencies
+sudo apt install -y build-essential libpcap-dev libpcre3-dev libdumbnet-dev \
+    bison flex zlib1g-dev liblzma-dev openssl libssl-dev
+
+# Install Snort
+sudo apt install -y snort
+
+# Or install from source for latest version
+wget https://www.snort.org/downloads/snort/snort-2.9.20.tar.gz
+tar -xvzf snort-2.9.20.tar.gz
+cd snort-2.9.20
+./configure --enable-sourcefire
+make
+sudo make install
+2. Verify Snort Version
+bash
+snort -V
+# or
+snort --version
+3. Identify Snort Configuration File
+bash
+# Main configuration file
+/etc/snort/snort.conf
+
+# Community rules directory
+/etc/snort/rules/
+
+# Other important files
+ls /etc/snort/
+4. Determine Network Interface
+bash
+# List all network interfaces
+ip link show
+# or
+ifconfig -a
+# or
+ip addr show
+
+# Note your interface name (e.g., eth0, ens33, enp0s3)
+5. Run Snort in Packet Sniffing Mode
+bash
+# Sniff on interface (replace eth0 with your interface)
+sudo snort -i eth0 -v
+
+# -v = verbose (show packets)
+# -i = interface
+6. Capture Only ICMP Packets
+bash
+sudo snort -i eth0 -v icmp
+# or using BPF syntax
+sudo snort -i eth0 -v 'icmp'
+7. Capture TCP Packets
+bash
+sudo snort -i eth0 -v tcp
+# or
+sudo snort -i eth0 -v 'tcp'
+8. Display Packet Headers Only
+bash
+sudo snort -i eth0 -v -e
+# -e = display link-layer headers
+# Or use -v for verbose (headers only, no payload)
+9. Create Custom Rule for ICMP Ping
+bash
+# Edit local rules file
+sudo nano /etc/snort/rules/local.rules
+
+# Add this rule:
+alert icmp any any -> any any (msg:"ICMP Ping Detected"; icode:0; itype:8; sid:1000001; rev:1;)
+10. Test Rule Using Ping
+bash
+# Terminal 1: Start Snort with rules
+sudo snort -i eth0 -c /etc/snort/snort.conf -A console
+
+# Terminal 2: Generate ping traffic
+ping 8.8.8.8
+ping google.com
+11. Create Rule for Telnet Traffic
+bash
+# Edit local rules
+sudo nano /etc/snort/rules/local.rules
+
+# Add Telnet detection rule:
+alert tcp any any -> any 23 (msg:"Telnet Traffic Detected"; sid:1000002; rev:1;)
+12. Create Rule for HTTP Traffic on Port 80
+bash
+# Add to local.rules
+alert tcp any any -> any 80 (msg:"HTTP Traffic Detected"; content:"HTTP"; sid:1000003; rev:1;)
+13. Restart Snort After Modifying Rules
+bash
+# Kill existing Snort process
+sudo pkill snort
+
+# Restart with new rules
+sudo snort -i eth0 -c /etc/snort/snort.conf -D
+# -D = run as daemon
+14. Verify Alerts Are Generated
+bash
+# Check if alert file exists
+ls -la /var/log/snort/
+
+# View alerts in console mode
+sudo snort -i eth0 -c /etc/snort/snort.conf -A console
+15. View Snort Alert Logs
+bash
+# View alert file
+sudo cat /var/log/snort/alert
+
+# View in fast mode
+sudo cat /var/log/snort/snort.alert.fast
+
+# Follow logs in real-time
+sudo tail -f /var/log/snort/alert
+Question 2: Squid Proxy
+1. Install Squid Proxy
+bash
+sudo apt update
+sudo apt install -y squid
+2. Verify Squid Service Status
+bash
+# Check service status
+sudo systemctl status squid
+
+# Start/Stop/Restart
+sudo systemctl start squid
+sudo systemctl stop squid
+sudo systemctl restart squid
+
+# Enable on boot
+sudo systemctl enable squid
+3. Identify Default Configuration File
+bash
+# Main config file
+/etc/squid/squid.conf
+
+# Backup original
+sudo cp /etc/squid/squid.conf /etc/squid/squid.conf.backup
+4. Configure Squid for Local Network Only
+bash
+sudo nano /etc/squid/squid.conf
+
+# Find and modify these lines (uncomment/modify):
+acl localnet src 192.168.1.0/24    # Your local network range
+http_access allow localnet
+http_access deny all
+
+# Set port (default 3128)
+http_port 3128
+
+# Save and exit
+5. Configure Browser to Use Squid Proxy
+Firefox:
+
+Settings → Network Settings → Manual Proxy Configuration
+HTTP Proxy: your-server-ip Port: 3128
+Check "Use this proxy for all protocols"
+Chrome:
+
+Settings → System → Open Proxy Settings
+Or use command line: google-chrome --proxy-server="http://your-ip:3128"
+System-wide:
+
+bash
+export http_proxy=http://your-server-ip:3128
+export https_proxy=http://your-server-ip:3128
+6. Verify Internet Browsing Works
+bash
+# Check Squid logs
+sudo tail -f /var/log/squid/access.log
+
+# Test from client browser
+# Should see entries in access.log
+7. Block Specific Website (facebook.com)
+bash
+sudo nano /etc/squid/squid.conf
+
+# Add ACL for blocked sites
+acl blocked_sites dstdomain .facebook.com
+http_access deny blocked_sites
+
+# Or create a block list file
+sudo nano /etc/squid/blocked_sites.txt
+# Add:
+.facebook.com
+www.facebook.com
+
+# In squid.conf:
+acl blocked_sites dstdomain "/etc/squid/blocked_sites.txt"
+http_access deny blocked_sites
+
+# Restart Squid
+sudo systemctl restart squid
+8. Allow Only cdac.in and ubuntu.com (Whitelist)
+bash
+sudo nano /etc/squid/squid.conf
+
+# Clear existing rules and add:
+acl allowed_sites dstdomain .cdac.in .ubuntu.com
+http_access allow allowed_sites
+http_access deny all
+
+# Or using file:
+sudo nano /etc/squid/allowed_sites.txt
+# Add:
+.cdac.in
+.ubuntu.com
+
+# In squid.conf:
+acl allowed_sites dstdomain "/etc/squid/allowed_sites.txt"
+http_access allow allowed_sites
+http_access deny all
+
+# Restart
+sudo systemctl restart squid
+Question 3: IPTables and firewalld
+IPTables
+1. Display Existing Rules
+bash
+# List all rules
+sudo iptables -L
+sudo iptables -L -v
+sudo iptables -L -n -v
+
+# List specific table
+sudo iptables -t filter -L
+sudo iptables -t nat -L
+sudo iptables -t mangle -L
+2. Allow SSH Traffic
+bash
+# Allow SSH (port 22)
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+
+# Or more specific - allow from specific network
+sudo iptables -A INPUT -p tcp -s 192.168.1.0/24 --dport 22 -j ACCEPT
+
+# Save rules (Ubuntu/Debian)
+sudo apt install iptables-persistent
+sudo netfilter-persistent save
+3. Block ICMP (Ping) Requests
+bash
+# Block all incoming ICMP
+sudo iptables -A INPUT -p icmp --icmp-type echo-request -j DROP
+
+# Or reject (sends response back)
+sudo iptables -A INPUT -p icmp --icmp-type echo-request -j REJECT
+
+# Save rules
+sudo netfilter-persistent save
+4. Block Specific IP Address
+bash
+# Block specific IP
+sudo iptables -A INPUT -s 192.168.1.100 -j DROP
+
+# Block specific IP on specific port
+sudo iptables -A INPUT -s 192.168.1.100 -p tcp --dport 80 -j DROP
+
+# Block IP range
+sudo iptables -A INPUT -s 192.168.1.0/24 -j DROP
+
+# Save rules
+sudo netfilter-persistent save
