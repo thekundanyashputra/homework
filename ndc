@@ -1,0 +1,221 @@
+Question 1: Firewalld Zone
+bash
+sudo firewall-cmd --new-zone=ITISS --permanent
+sudo firewall-cmd --reload
+sudo firewall-cmd --zone=ITISS --add-interface=ens33 --permanent
+sudo firewall-cmd --zone=ITISS --add-service=ssh --permanent
+sudo firewall-cmd --zone=ITISS --add-port=30000-35000/tcp --permanent
+sudo firewall-cmd --reload
+sudo firewall-cmd --zone=ITISS --list-all
+Question 2: HTTP Access with SSH Block
+bash
+sudo apt install apache2 -y
+sudo systemctl start apache2
+sudo systemctl enable apache2
+sudo firewall-cmd --new-zone=ITISS --permanent
+sudo firewall-cmd --reload
+sudo firewall-cmd --zone=ITISS --add-interface=ens33 --permanent
+sudo firewall-cmd --zone=ITISS --add-service=http --permanent
+sudo firewall-cmd --zone=ITISS --remove-service=ssh --permanent
+sudo firewall-cmd --zone=ITISS --add-rich-rule='rule family="ipv4" source address="192.168.1.100" service name="ssh" reject' --permanent
+sudo firewall-cmd --reload
+sudo firewall-cmd --zone=ITISS --list-all
+Question 3: Port Forwarding
+bash
+sudo sysctl -w net.ipv4.ip_forward=1
+echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+sudo firewall-cmd --zone=public --add-forward-port=port=8000:proto=tcp:toport=80 --permanent
+sudo firewall-cmd --zone=public --add-masquerade --permanent
+sudo firewall-cmd --reload
+sudo firewall-cmd --zone=public --list-all
+Question 4: pfSense VM-Based Filtering
+pfSense Web Interface Configuration:
+
+Aliases:
+
+Name: Indian_Govt
+gov.in
+nic.in
+india.gov.in
+
+Name: Indian_Banks
+sbi.co.in
+icicibank.com
+hdfcbank.com
+
+Name: VM2_Allowed
+microsoft.com
+redhat.com
+wikipedia.org
+google.com
+oracle.com
+Firewall Rules VM1:
+
+Action: Pass, Interface: LAN1, Source: LAN1 net, Destination: Indian_Govt, Port: HTTP/HTTPS
+Action: Pass, Interface: LAN1, Source: LAN1 net, Destination: Indian_Banks, Port: HTTP/HTTPS
+Action: Pass, Interface: LAN1, Source: LAN1 net, Destination: cdac.in, Port: HTTP/HTTPS
+Action: Pass, Interface: LAN1, Source: LAN1 net, Destination: google.com, Port: HTTP/HTTPS
+Action: Block, Interface: LAN1, Source: LAN1 net, Destination: Any
+Firewall Rules VM2:
+
+Action: Pass, Interface: LAN2, Source: LAN2 net, Destination: VM2_Allowed, Port: HTTP/HTTPS
+Action: Block, Interface: LAN2, Source: LAN2 net, Destination: Any
+Question 5: pfSense User-Based Filtering
+Squid Installation:
+
+System → Package Manager → Available Packages → Install Squid
+Squid Configuration:
+
+Services → Squid Proxy Server
+Enable: Checked
+Proxy Interface: LAN
+Port: 3128
+Authentication Method: Local
+Users Created:
+
+Username: John
+Password: [password]
+Allowed: Indian_Govt, Indian_Banks, Google, CDAC
+
+Username: Peter  
+Password: [password]
+Allowed: Microsoft, RedHat, Wikipedia, Google, Oracle
+SquidGuard Rules:
+
+Services → SquidGuard Proxy Filter
+Target Categories: Create for each allowed domain group
+ACL: Assign users to respective target categories
+Question 6: Snort IDS
+bash
+sudo apt install snort -y
+sudo snort -V
+sudo nano /etc/snort/rules/local.rules
+local.rules content:
+
+alert tcp any any -> $HOME_NET any (msg:"NMAP Port Scan Detected"; flags:S; threshold:type both, track by_src, count 10, seconds 60; sid:1000001; rev:1;)
+alert icmp any any -> $HOME_NET any (msg:"Large ICMP Packet - Possible DOS"; dsize:>1000; sid:1000002; rev:1;)
+alert icmp any any -> $HOME_NET any (msg:"ICMP Flood Detected"; threshold:type both, track by_src, count 50, seconds 10; sid:1000003; rev:1;)
+alert tcp $HOME_NET any -> any $HTTP_PORTS (msg:"HTTP Access from Internal Network"; sid:1000004; rev:1;)
+bash
+sudo snort -T -c /etc/snort/snort.conf
+sudo snort -A console -c /etc/snort/snort.conf -i ens33
+Question 7: Wazuh SIEM
+Server:
+
+bash
+curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | sudo apt-key add -
+echo "deb https://packages.wazuh.com/4.x/apt/ stable main" | sudo tee /etc/apt/sources.list.d/wazuh.list
+sudo apt update
+sudo apt install wazuh-manager -y
+sudo systemctl start wazuh-manager
+sudo systemctl enable wazuh-manager
+sudo apt install wazuh-dashboard -y
+Client Ubuntu:
+
+bash
+wget https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/wazuh-agent_4.7.0-1_amd64.deb
+sudo dpkg -i wazuh-agent_4.7.0-1_amd64.deb
+sudo nano /var/ossec/etc/ossec.conf
+sudo systemctl start wazuh-agent
+sudo systemctl enable wazuh-agent
+Client Windows:
+
+Download wazuh-agent-4.7.0-1.msi
+Install with Wazuh Server IP
+Start Wazuh service
+Question 8: Wazuh + Snort Integration
+bash
+sudo nano /var/ossec/etc/ossec.conf
+Add to ossec.conf:
+
+xml
+<localfile>
+  <log_format>snort-full</log_format>
+  <location>/var/log/snort/alert</location>
+</localfile>
+bash
+sudo systemctl restart wazuh-agent
+sudo snort -A console -c /etc/snort/snort.conf -i ens33
+Question 9: Wireshark
+bash
+ip addr show
+sudo wireshark &
+Capture Filter:
+
+ip.addr == 192.168.1.50
+Generate Traffic:
+
+bash
+ping 192.168.1.1
+nslookup www.cdac.in
+Question 10: tcpdump
+bash
+sudo tcpdump -D
+sudo tcpdump -i ens33 -w stm-exam.pcap
+ping 192.168.1.1
+dig www.cdac.in
+sudo tcpdump -r stm-exam.pcap -nn
+Question 11: Nginx Reverse Proxy
+VM1 & VM2:
+
+bash
+sudo apt install apache2 -y
+echo "<h1>Exam Portal</h1>" | sudo tee /var/www/html/index.html
+sudo systemctl restart apache2
+VM3:
+
+bash
+sudo apt install nginx -y
+sudo nano /etc/nginx/nginx.conf
+nginx.conf:
+
+nginx
+http {
+    upstream exam_server {
+        server 192.168.1.51:80;
+    }
+    upstream result_server {
+        server 192.168.1.52:80;
+    }
+    server {
+        listen 80;
+        location /exam {
+            proxy_pass http://exam_server/;
+        }
+        location /result {
+            proxy_pass http://result_server/;
+        }
+    }
+}
+bash
+sudo nginx -t
+sudo systemctl restart nginx
+Question 12: Nginx Load Balancer
+VM1 & VM2:
+
+bash
+echo "<h1>Server 1</h1>" | sudo tee /var/www/html/index.html
+sudo systemctl restart apache2
+VM3:
+
+bash
+sudo nano /etc/nginx/nginx.conf
+nginx.conf:
+
+nginx
+http {
+    upstream backend_servers {
+        server 192.168.1.51 weight=6;
+        server 192.168.1.52 weight=1;
+    }
+    server {
+        listen 80;
+        location / {
+            proxy_pass http://backend_servers;
+        }
+    }
+}
+bash
+sudo nginx -t
+sudo systemctl restart nginx
+for i in {1..14}; do curl -s http://192.168.1.50/; done
